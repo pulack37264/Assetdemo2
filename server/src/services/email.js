@@ -53,10 +53,12 @@ function getTransporter() {
 /**
  * Send asset assignment notification to the employee's email.
  * @param {{ Name: string, Email?: string }} employee - Employee name and email
- * @param {{ Name: string, SerialNumber?: string }} asset - Asset name and serial
+ * @param {{ Name: string, SerialNumber?: string } | Array<{ Name: string, SerialNumber?: string }>} assets - One or more assigned assets
  * @param {string} assignedDate - ISO date string of assignment
  */
-export async function sendAssignmentNotification(employee, asset, assignedDate) {
+export async function sendAssignmentNotification(employee, assets, assignedDate) {
+  const assignedAssets = Array.isArray(assets) ? assets : [assets];
+  if (assignedAssets.length === 0) return;
   const to = employee?.Email?.trim();
   if (!to) {
     console.warn('[email] Assignment notification skipped: no employee email');
@@ -73,7 +75,7 @@ export async function sendAssignmentNotification(employee, asset, assignedDate) 
     ? new Date(assignedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
     : 'N/A';
   
-  const subject = 'IT Asset Assigned Notification';
+  const subject = assignedAssets.length === 1 ? 'IT Asset Assigned Notification' : 'IT Assets Assigned Notification';
   const logoHtml = buildLogoHtml();
   const html = `
     <!DOCTYPE html>
@@ -105,33 +107,29 @@ export async function sendAssignmentNotification(employee, asset, assignedDate) 
         <div class="content">
           <p class="greeting">Dear ${escapeHtml(employee.Name || 'Valued Employee')},</p>
           
-          <p>We are pleased to inform you that the following IT asset has been assigned to you:</p>
+          <p>We are pleased to inform you that the following ${assignedAssets.length === 1 ? 'IT asset has' : 'IT assets have'} been assigned to you:</p>
           
           <table class="table">
             <thead>
               <tr>
-                <th>Asset Details</th>
-                <th>Value</th>
+                <th>Asset Name</th>
+                <th>Serial Number</th>
+                <th>Assignment Date</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td><strong>Asset Name</strong></td>
-                <td>${escapeHtml(asset.Name || '—')}</td>
-              </tr>
-              <tr>
-                <td><strong>Serial Number</strong></td>
-                <td>${escapeHtml(asset.SerialNumber || '—')}</td>
-              </tr>
-              <tr>
-                <td><strong>Assignment Date</strong></td>
-                <td>${escapeHtml(formattedDate)}</td>
-              </tr>
+              ${assignedAssets.map((asset) => `
+                <tr>
+                  <td>${escapeHtml(asset.Name || '—')}</td>
+                  <td>${escapeHtml(asset.SerialNumber || '—')}</td>
+                  <td>${escapeHtml(formattedDate)}</td>
+                </tr>
+              `).join('')}
             </tbody>
           </table>
           
           <div class="warning">
-            <strong>Important:</strong> Please verify that the above information is accurate upon receiving the asset. You are responsible for the proper use, care, and safekeeping of this equipment. 
+            <strong>Important:</strong> Please verify that the above information is accurate upon receiving the asset(s). You are responsible for the proper use, care, and safekeeping of this equipment.
           </div>
           
           <p>If you have any questions or notice any discrepancies, please contact the IT Department immediately.</p>

@@ -314,6 +314,16 @@ export async function assignAsset(assetId: number, employeeId: number): Promise<
   if (!res.ok || json.error) throw new Error(json.error || 'Failed to assign asset');
 }
 
+export async function assignAssets(assetIds: number[], employeeId: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/assignments`, {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ assetIds, employeeId }),
+  });
+  const json = await parseJson(res);
+  if (!res.ok || json.error) throw new Error(json.error || 'Failed to assign assets');
+}
+
 export async function returnAsset(assetId: number): Promise<void> {
   const res = await fetch(`${API_BASE}/assignments/return/${assetId}`, {
     method: 'POST',

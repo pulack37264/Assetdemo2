@@ -4,6 +4,7 @@ import './App.css';
 import type { Asset, Employee, Repair, DashboardStats, License, GatePass, AuthUser, TrackingHistory } from './api';
 import {
   assignAsset,
+  assignAssets,
   clearToken,
   completeRepair,
   createAsset,
@@ -127,6 +128,9 @@ function App() {
   const [assetSubmitting, setAssetSubmitting] = useState(false);
   const [invoiceNumberByAsset, setInvoiceNumberByAsset] = useState<Record<number, string>>({});
   const [assigningId, setAssigningId] = useState<number | null>(null);
+  const [selectedBulkAssetIds, setSelectedBulkAssetIds] = useState<number[]>([]);
+  const [bulkEmployeeId, setBulkEmployeeId] = useState<number | ''>('');
+  const [bulkAssigning, setBulkAssigning] = useState(false);
   const [returningId, setReturningId] = useState<number | null>(null);
   const [uploadingInvoiceId, setUploadingInvoiceId] = useState<number | null>(null);
   const [showAddAssetForm, setShowAddAssetForm] = useState(false);
@@ -755,6 +759,25 @@ function App() {
       setAssetError(e.message ?? 'Failed to assign asset');
     } finally {
       setAssigningId(null);
+    }
+  }
+
+  async function onAssignSelectedAssets() {
+    if (selectedBulkAssetIds.length === 0 || !bulkEmployeeId) {
+      setAssetError('Select available assets and an employee before assigning.');
+      return;
+    }
+    try {
+      setBulkAssigning(true);
+      setAssetError(null);
+      await assignAssets(selectedBulkAssetIds, Number(bulkEmployeeId));
+      setSelectedBulkAssetIds([]);
+      setBulkEmployeeId('');
+      await refreshAssets();
+    } catch (e: any) {
+      setAssetError(e.message ?? 'Failed to assign selected assets');
+    } finally {
+      setBulkAssigning(false);
     }
   }
 
@@ -1839,6 +1862,31 @@ function App() {
                     style={{ flex: '1', minWidth: '12rem', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #fca5a5', background: '#fff', color: '#1f2937' }}
                   />
                 </div>
+                <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span>{selectedBulkAssetIds.length} available asset{selectedBulkAssetIds.length === 1 ? '' : 's'} selected</span>
+                  <select
+                    value={bulkEmployeeId}
+                    onChange={(e) => setBulkEmployeeId(e.target.value ? Number(e.target.value) : '')}
+                    aria-label="Choose employee for selected assets"
+                  >
+                    <option value="">Assign selected to…</option>
+                    {employees.map((emp) => (
+                      <option key={emp.Id} value={emp.Id}>{emp.Name} (ID {emp.Id})</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={onAssignSelectedAssets}
+                    disabled={bulkAssigning || selectedBulkAssetIds.length === 0 || !bulkEmployeeId}
+                  >
+                    {bulkAssigning ? 'Assigning…' : 'Assign selected'}
+                  </button>
+                  {selectedBulkAssetIds.length > 0 && (
+                    <button type="button" onClick={() => setSelectedBulkAssetIds([])} disabled={bulkAssigning}>
+                      Clear selection
+                    </button>
+                  )}
+                </div>
                 {(() => {
                   const q = assetSearchQuery.trim().toLowerCase();
                   const filtered = q
@@ -1884,6 +1932,7 @@ function App() {
                 <table className="table">
                   <thead>
                     <tr>
+                      <th aria-label="Select asset" />
                       {sortTh('Name', 'Name')}
                       {sortTh('Type', 'Type')}
                       {sortTh('SerialNumber', 'Serial')}
@@ -1898,13 +1947,26 @@ function App() {
                   </thead>
                   <tbody>
                     {displayAssets.length === 0 ? (
-                      <tr><td colSpan={10} style={{ textAlign: 'center', padding: '1.5rem', color: '#6b7280' }}>No assets match your search.</td></tr>
+                      <tr><td colSpan={11} style={{ textAlign: 'center', padding: '1.5rem', color: '#6b7280' }}>No assets match your search.</td></tr>
                     ) : displayAssets.map((asset) => (
                       <tr
                         key={asset.Id}
                         style={{ cursor: 'pointer' }}
                         onClick={() => setSelectedAssetId(asset.Id)}
                       >
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${asset.Name} for assignment`}
+                            checked={selectedBulkAssetIds.includes(asset.Id)}
+                            disabled={asset.Status !== 'Available' || bulkAssigning}
+                            onChange={(e) => setSelectedBulkAssetIds((current) => (
+                              e.target.checked
+                                ? [...current, asset.Id]
+                                : current.filter((id) => id !== asset.Id)
+                            ))}
+                          />
+                        </td>
                         <td>{asset.Name}</td>
                         <td>{asset.Type}</td>
                         <td>{asset.SerialNumber}</td>

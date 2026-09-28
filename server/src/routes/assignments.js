@@ -15,10 +15,17 @@ function getDbOrFail() {
 // POST /api/assignments - assign asset to employee
 router.post('/', async (req, res, next) => {
   try {
-    const assetId = Number(req.body?.assetId ?? req.body?.AssetId);
+    const isBatch = Array.isArray(req.body?.assetIds);
+    const rawAssetIds = isBatch ? req.body.assetIds : [req.body?.assetId ?? req.body?.AssetId];
+    const assetIds = rawAssetIds.map(Number);
     const employeeId = Number(req.body?.employeeId ?? req.body?.EmployeeId);
-    if (!assetId || !employeeId) {
-      return res.status(400).json({ data: null, error: 'assetId and employeeId are required' });
+    if (
+      assetIds.length === 0 ||
+      assetIds.some((id) => !Number.isInteger(id) || id <= 0) ||
+      new Set(assetIds).size !== assetIds.length ||
+      !Number.isInteger(employeeId) || employeeId <= 0
+    ) {
+      return res.status(400).json({ data: null, error: 'A valid employeeId and one or more unique asset IDs are required' });
     }
 
     const db = getDbOrFail();
@@ -32,48 +39,53 @@ router.post('/', async (req, res, next) => {
       return res.status(404).json({ data: null, error: 'Employee not found' });
     }
 
-    // Check asset exists and is Available (need SerialNumber for notification)
-    stmt = db.prepare(
-      'SELECT Id, Name, SerialNumber, Status FROM Assets WHERE Id = ?'
-    );
-    stmt.bind([assetId]);
-    const asset = (await stmt.step()) ? stmt.getAsObject() : null;
-    stmt.free();
-    if (!asset) {
-      return res.status(404).json({ data: null, error: 'Asset not found' });
-    }
-    if (asset.Status !== 'Available') {
-      return res
-        .status(409)
-        .json({ data: null, error: `Asset is not available (current status: ${asset.Status})` });
+    // Validate the full batch before creating any assignments.
+    const assets = [];
+    for (const assetId of assetIds) {
+      stmt = db.prepare('SELECT Id, Name, SerialNumber, Status FROM Assets WHERE Id = ?');
+      stmt.bind([assetId]);
+      const asset = (await stmt.step()) ? stmt.getAsObject() : null;
+      stmt.free();
+      if (!asset) {
+        return res.status(404).json({ data: null, error: `Asset ${assetId} not found` });
+      }
+      if (asset.Status !== 'Available') {
+        return res.status(409).json({
+          data: null,
+          error: `Asset "${asset.Name}" is not available (current status: ${asset.Status})`,
+        });
+      }
+      assets.push(asset);
     }
 
-    // Create assignment and update asset
     const now = new Date().toISOString();
-    stmt = db.prepare(
-      'INSERT INTO Assignments (EmployeeId, AssetId, AssignedDate, Status) VALUES (?, ?, ?, ?)'
-    );
-    await stmt.run([employeeId, assetId, now, 'Active']);
-    stmt.free();
+    for (const asset of assets) {
+      stmt = db.prepare(
+        'INSERT INTO Assignments (EmployeeId, AssetId, AssignedDate, Status) VALUES (?, ?, ?, ?)'
+      );
+      await stmt.run([employeeId, asset.Id, now, 'Active']);
+      stmt.free();
 
-    stmt = db.prepare('UPDATE Assets SET Status = ?, AssignedToId = ? WHERE Id = ?');
-    await stmt.run(['Assigned', employeeId, assetId]);
-    stmt.free();
+      stmt = db.prepare('UPDATE Assets SET Status = ?, AssignedToId = ? WHERE Id = ?');
+      await stmt.run(['Assigned', employeeId, asset.Id]);
+      stmt.free();
+    }
 
     persist();
 
-    // Notify employee by email (non-blocking; assignment already succeeded)
-    sendAssignmentNotification(employee, asset, now).catch((err) => {
+    // Send one email for the complete batch after assignments succeed.
+    sendAssignmentNotification(employee, assets, now).catch((err) => {
       console.error('[assignments] Email notification error:', err.message);
     });
 
+    const assignmentResults = assets.map((asset) => ({
+      AssetId: asset.Id,
+      EmployeeId: employeeId,
+      AssignedDate: now,
+      Status: 'Active',
+    }));
     return res.status(201).json({
-      data: {
-        AssetId: assetId,
-        EmployeeId: employeeId,
-        AssignedDate: now,
-        Status: 'Active',
-      },
+      data: isBatch ? assignmentResults : assignmentResults[0],
       error: null,
     });
   } catch (err) {
