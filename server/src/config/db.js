@@ -164,6 +164,27 @@ async function initMssql() {
 
 async function ensureMssqlSchema(pool) {
   await pool.request().query(`
+    DECLARE @constraintName sysname;
+    DECLARE @dropSql nvarchar(max);
+    DECLARE typeConstraints CURSOR LOCAL FAST_FORWARD FOR
+      SELECT name
+      FROM sys.check_constraints
+      WHERE parent_object_id = OBJECT_ID(N'dbo.Assets')
+        AND definition LIKE N'%Type%';
+
+    OPEN typeConstraints;
+    FETCH NEXT FROM typeConstraints INTO @constraintName;
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+      SET @dropSql = N'ALTER TABLE dbo.Assets DROP CONSTRAINT ' + QUOTENAME(@constraintName);
+      EXEC sys.sp_executesql @dropSql;
+      FETCH NEXT FROM typeConstraints INTO @constraintName;
+    END;
+    CLOSE typeConstraints;
+    DEALLOCATE typeConstraints;
+  `);
+
+  await pool.request().query(`
     IF OBJECT_ID(N'dbo.Invoices', N'U') IS NOT NULL
        AND COL_LENGTH('dbo.Assets', 'InvoiceId') IS NULL
     BEGIN

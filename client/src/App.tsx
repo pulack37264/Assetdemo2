@@ -117,7 +117,7 @@ function App() {
   const [assetLoading, setAssetLoading] = useState(true);
   const [assetError, setAssetError] = useState<string | null>(null);
   const [assetName, setAssetName] = useState('');
-  const [assetType, setAssetType] = useState('Laptop');
+  const [assetType, setAssetType] = useState('');
   const [serialNumber, setSerialNumber] = useState('');
   const [vendor, setVendor] = useState('');
   const [purchaseDate, setPurchaseDate] = useState('');
@@ -149,6 +149,7 @@ function App() {
   const [repairError, setRepairError] = useState<string | null>(null);
   const [showLogRepairForm, setShowLogRepairForm] = useState(false);
   const [repairAssetId, setRepairAssetId] = useState<number | ''>('');
+  const [repairAssetSearchQuery, setRepairAssetSearchQuery] = useState('');
   const [issueDescription, setIssueDescription] = useState('');
   const [repairVendor, setRepairVendor] = useState('');
   const [repairCost, setRepairCost] = useState('');
@@ -666,7 +667,7 @@ function App() {
         assetInvoiceNumber || null
       );
       setAssetName('');
-      setAssetType('Laptop');
+      setAssetType('');
       setSerialNumber('');
       setVendor('');
       setPurchaseDate('');
@@ -726,7 +727,7 @@ function App() {
       setEditingAssetId(null);
       setShowAddAssetForm(false);
       setAssetName('');
-      setAssetType('Laptop');
+      setAssetType('');
       setSerialNumber('');
       setVendor('');
       setPurchaseDate('');
@@ -815,6 +816,7 @@ function App() {
         cost: repairCost !== '' ? Number(repairCost) : null,
       });
       setRepairAssetId('');
+      setRepairAssetSearchQuery('');
       setIssueDescription('');
       setRepairVendor('');
       setRepairCost('');
@@ -1155,7 +1157,7 @@ function App() {
                           : '';
                         return (
                           <li key={a.Id}>
-                            <strong>{a.Name}</strong> – {a.Vendor} – Expiry: <strong>{a.ExpiryDate}</strong>{daysText}
+                            <strong>{a.Name}</strong> – Serial: <strong>{a.SerialNumber || '—'}</strong> – {a.Vendor} – Expiry: <strong>{a.ExpiryDate}</strong>{daysText}
                           </li>
                         );
                       })}
@@ -1531,14 +1533,12 @@ function App() {
                 </label>
                 <label>
                   Type
-                  <select value={assetType} onChange={(e) => setAssetType(e.target.value)} required>
-                    <option value="Laptop">Laptop</option>
-                    <option value="Desktop">Desktop</option>
-                    <option value="Monitor">Monitor</option>
-                    <option value="Printer">Printer</option>
-                    <option value="Network Equipment">Network Equipment</option>
-                    <option value="Other">Other</option>
-                  </select>
+                  <input
+                    value={assetType}
+                    onChange={(e) => setAssetType(e.target.value)}
+                    placeholder="Enter asset type"
+                    required
+                  />
                 </label>
                 <label>
                   Serial number
@@ -1629,7 +1629,7 @@ function App() {
                       setShowAddAssetForm(false);
                       setAssetError(null);
                       setAssetName('');
-                      setAssetType('Laptop');
+                      setAssetType('');
                       setSerialNumber('');
                       setVendor('');
                       setPurchaseDate('');
@@ -1654,14 +1654,12 @@ function App() {
                 </label>
                 <label>
                   Type
-                  <select value={assetType} onChange={(e) => setAssetType(e.target.value)} required>
-                    <option value="Laptop">Laptop</option>
-                    <option value="Desktop">Desktop</option>
-                    <option value="Monitor">Monitor</option>
-                    <option value="Printer">Printer</option>
-                    <option value="Network Equipment">Network Equipment</option>
-                    <option value="Other">Other</option>
-                  </select>
+                  <input
+                    value={assetType}
+                    onChange={(e) => setAssetType(e.target.value)}
+                    placeholder="Enter asset type"
+                    required
+                  />
                 </label>
                 <label>
                   Serial number
@@ -2108,6 +2106,16 @@ function App() {
               <form onSubmit={onRepairSubmit} className="form-grid">
                 <label>
                   Asset
+                  <input
+                    type="search"
+                    value={repairAssetSearchQuery}
+                    onChange={(e) => {
+                      setRepairAssetSearchQuery(e.target.value);
+                      setRepairAssetId('');
+                    }}
+                    placeholder="Search by name, serial number, or type"
+                    aria-label="Search assets for repair"
+                  />
                   <select
                     value={repairAssetId}
                     onChange={(e) => setRepairAssetId(e.target.value ? Number(e.target.value) : '')}
@@ -2115,7 +2123,12 @@ function App() {
                   >
                     <option value="">Select asset…</option>
                     {assets
-                      .filter((a) => a.Status !== 'In Repair')
+                      .filter((a) => {
+                        if (a.Status === 'In Repair') return false;
+                        const query = repairAssetSearchQuery.trim().toLowerCase();
+                        return !query || [a.Name, a.SerialNumber, a.Type, a.Status]
+                          .some((value) => value.toLowerCase().includes(query));
+                      })
                       .map((a) => (
                         <option key={a.Id} value={a.Id}>
                           {a.Name} ({a.SerialNumber}) – {a.Status}

@@ -18,7 +18,7 @@ IF OBJECT_ID(N'dbo.Assets', N'U') IS NULL
 CREATE TABLE dbo.Assets (
   Id INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
   Name NVARCHAR(255) NOT NULL,
-  Type NVARCHAR(100) NOT NULL CHECK (Type IN (N'Laptop', N'Desktop', N'Monitor', N'Printer', N'Network Equipment', N'Other')),
+  Type NVARCHAR(100) NOT NULL,
   SerialNumber NVARCHAR(255) NOT NULL UNIQUE,
   Status NVARCHAR(50) NOT NULL DEFAULT N'Available' CHECK (Status IN (N'Available', N'Assigned', N'In Repair', N'Retired')),
   Vendor NVARCHAR(255) NOT NULL,

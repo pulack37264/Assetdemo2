@@ -428,6 +428,7 @@ export type DashboardStats = {
   upcomingWarranties: Array<{
     Id: number;
     Name: string;
+    SerialNumber: string;
     Vendor: string;
     ExpiryDate: string;
   }>;

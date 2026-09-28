@@ -41,7 +41,7 @@ router.get('/stats', async (_req, res, next) => {
       .toISOString()
       .slice(0, 10);
     const assetWarrantyStmt = db.prepare(`
-      SELECT Id, Name, Vendor, WarrantyExpiry AS ExpiryDate
+      SELECT Id, Name, SerialNumber, Vendor, WarrantyExpiry AS ExpiryDate
       FROM Assets
       WHERE WarrantyExpiry IS NOT NULL AND WarrantyExpiry >= ? AND WarrantyExpiry < ?
       ORDER BY WarrantyExpiry ASC

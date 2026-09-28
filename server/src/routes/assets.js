@@ -51,7 +51,6 @@ function pickAssetFields(body) {
   return { name, type, serialNumber, status, vendor, purchaseDate, warrantyExpiry };
 }
 
-const VALID_TYPES = ['Laptop', 'Desktop', 'Monitor', 'Printer', 'Network Equipment', 'Other'];
 const VALID_STATUS = ['Available', 'Assigned', 'In Repair', 'Retired'];
 const ASSET_SELECT_FIELDS = `
   a.Id,
@@ -422,9 +421,6 @@ router.post('/', (req, res, next) => {
         error: 'Name, type, serialNumber, vendor, and purchaseDate are required',
       });
     }
-    if (!VALID_TYPES.includes(type)) {
-      return res.status(400).json({ data: null, error: `Invalid type. Allowed: ${VALID_TYPES.join(', ')}` });
-    }
     if (!VALID_STATUS.includes(status)) {
       return res.status(400).json({ data: null, error: `Invalid status. Allowed: ${VALID_STATUS.join(', ')}` });
     }
@@ -473,9 +469,6 @@ router.put('/:id', async (req, res, next) => {
         data: null,
         error: 'Name, type, serialNumber, vendor, and purchaseDate are required',
       });
-    }
-    if (!VALID_TYPES.includes(type)) {
-      return res.status(400).json({ data: null, error: `Invalid type. Allowed: ${VALID_TYPES.join(', ')}` });
     }
     if (!VALID_STATUS.includes(status)) {
       return res.status(400).json({ data: null, error: `Invalid status. Allowed: ${VALID_STATUS.join(', ')}` });
