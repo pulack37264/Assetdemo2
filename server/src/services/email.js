@@ -4,14 +4,30 @@
  */
 
 import nodemailer from 'nodemailer';
+import { fileURLToPath } from 'node:url';
 
 const MAIL_FROM = process.env.MAIL_FROM || process.env.SMTP_USER || 'pulack@gmail.com';
-const LOGO_URL = process.env.LOGO_URL || 'https://your-domain.com/logo.png';
+const ENABLE_EMAIL_LOGO = process.env.MAIL_INCLUDE_LOGO === 'true';
+const LOGO_PATH = ENABLE_EMAIL_LOGO ? fileURLToPath(new URL('../../logo/CBLlogo.jpg', import.meta.url)) : null;
 const SMTP_HOST = process.env.SMTP_HOST;
 const SMTP_PORT = Number(process.env.SMTP_PORT) || 587;
 const SMTP_SECURE = process.env.SMTP_SECURE === 'true' || SMTP_PORT === 465;
 const SMTP_USER = process.env.SMTP_USER;
 const SMTP_PASS = process.env.SMTP_PASS;
+
+function buildLogoAttachment() {
+  if (!ENABLE_EMAIL_LOGO || !LOGO_PATH) return [];
+  return [{
+    filename: 'CBLlogo.jpg',
+    path: LOGO_PATH,
+    cid: 'company-logo',
+  }];
+}
+
+function buildLogoHtml() {
+  if (!ENABLE_EMAIL_LOGO) return '';
+  return '<img src="cid:company-logo" alt="City Brokerage Limited logo" style="height: 68px; width: auto; display: block; margin: 0 auto 10px;" />';
+}
 
 function isConfigured() {
   return Boolean(SMTP_HOST && SMTP_USER && SMTP_PASS);
@@ -58,6 +74,7 @@ export async function sendAssignmentNotification(employee, asset, assignedDate) 
     : 'N/A';
   
   const subject = 'IT Asset Assigned Notification';
+  const logoHtml = buildLogoHtml();
   const html = `
     <!DOCTYPE html>
     <html>
@@ -80,8 +97,9 @@ export async function sendAssignmentNotification(employee, asset, assignedDate) 
     </head>
     <body>
       <div class="container">
-        <div class="header">
-          <div class="company-name">City Brokerage Limited</div>
+        <div class="header" style="text-align: center; background-color: #f8f9fa; padding: 20px 20px 10px; border-bottom: 3px solid #DC143C;">
+          ${logoHtml}
+          <div style="font-size: 20px; letter-spacing: 0.5px; color: #333; text-transform: uppercase; font-weight: 900;">IT Assets Management System</div>
         </div>
         
         <div class="content">
@@ -113,7 +131,7 @@ export async function sendAssignmentNotification(employee, asset, assignedDate) 
           </table>
           
           <div class="warning">
-            <strong>Important:</strong> Please verify that the above information is accurate upon receiving the asset. You are responsible for the proper use, care, and safekeeping of this equipment in accordance with the company's IT Asset Management Policy.
+            <strong>Important:</strong> Please verify that the above information is accurate upon receiving the asset. You are responsible for the proper use, care, and safekeeping of this equipment. 
           </div>
           
           <p>If you have any questions or notice any discrepancies, please contact the IT Department immediately.</p>
@@ -134,6 +152,7 @@ export async function sendAssignmentNotification(employee, asset, assignedDate) 
       to,
       subject,
       html,
+      attachments: buildLogoAttachment(),
     });
     console.log('[email] Assignment notification sent to', to);
   } catch (err) {
@@ -165,6 +184,7 @@ export async function sendUnassignmentNotification(employee, asset, returnedDate
     : 'N/A';
   
   const subject = 'Asset Returned - Confirmation';
+  const logoHtml = buildLogoHtml();
   const html = `
     <!DOCTYPE html>
     <html>
@@ -187,8 +207,9 @@ export async function sendUnassignmentNotification(employee, asset, returnedDate
     </head>
     <body>
       <div class="container">
-        <div class="header">
-          <div class="company-name">City Brokerage Limited</div>
+        <div class="header" style="text-align: center; background-color: #f8f9fa; padding: 20px 20px 10px; border-bottom: 3px solid #DC143C;">
+          ${logoHtml}
+          <div style="font-size: 20px; letter-spacing: 0.5px; color: #333; text-transform: uppercase; font-weight: 900;">IT Assets Management System</div>
         </div>
         
         <div class="content">
@@ -241,6 +262,7 @@ export async function sendUnassignmentNotification(employee, asset, returnedDate
       to,
       subject,
       html,
+      attachments: buildLogoAttachment(),
     });
     console.log('[email] Unassignment notification sent to', to);
   } catch (err) {
