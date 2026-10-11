@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getDb, persist } from '../config/db.js';
-import { sendAssignmentNotification, sendUnassignmentNotification } from '../services/email.js';
+import { sendUnassignmentNotification } from '../services/email.js';
 
 const router = Router();
 
@@ -30,8 +30,7 @@ router.post('/', async (req, res, next) => {
 
     const db = getDbOrFail();
 
-    // Check employee exists (need Email for notification)
-    let stmt = db.prepare('SELECT Id, Name, Email FROM Employees WHERE Id = ?');
+    let stmt = db.prepare('SELECT Id FROM Employees WHERE Id = ?');
     stmt.bind([employeeId]);
     const employee = (await stmt.step()) ? stmt.getAsObject() : null;
     stmt.free();
@@ -73,11 +72,6 @@ router.post('/', async (req, res, next) => {
 
     persist();
 
-    // Send one email for the complete batch after assignments succeed.
-    sendAssignmentNotification(employee, assets, now).catch((err) => {
-      console.error('[assignments] Email notification error:', err.message);
-    });
-
     const assignmentResults = assets.map((asset) => ({
       AssetId: asset.Id,
       EmployeeId: employeeId,
@@ -86,6 +80,81 @@ router.post('/', async (req, res, next) => {
     }));
     return res.status(201).json({
       data: isBatch ? assignmentResults : assignmentResults[0],
+      error: null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/assignments/return-batch - return multiple assets
+router.post('/return-batch', async (req, res, next) => {
+  try {
+    const rawAssetIds = req.body?.assetIds;
+    if (
+      !Array.isArray(rawAssetIds) ||
+      rawAssetIds.length === 0 ||
+      rawAssetIds.some((id) => !Number.isInteger(Number(id)) || Number(id) <= 0) ||
+      new Set(rawAssetIds.map(Number)).size !== rawAssetIds.length
+    ) {
+      return res.status(400).json({ data: null, error: 'One or more unique valid asset IDs are required' });
+    }
+    const assetIds = rawAssetIds.map(Number);
+    const db = getDbOrFail();
+    const assignments = [];
+
+    for (const assetId of assetIds) {
+      let stmt = db.prepare(`
+        SELECT asn.Id AS AssignmentId, asn.AssetId, e.Name AS EmployeeName, e.Email,
+               ast.Name AS AssetName, ast.SerialNumber
+        FROM Assignments asn
+        JOIN Employees e ON e.Id = asn.EmployeeId
+        JOIN Assets ast ON ast.Id = asn.AssetId
+        WHERE asn.AssetId = ? AND asn.ReturnedDate IS NULL AND asn.Status = ?
+        ORDER BY asn.AssignedDate DESC
+        LIMIT 1
+      `);
+      stmt.bind([assetId, 'Active']);
+      const assignment = (await stmt.step()) ? stmt.getAsObject() : null;
+      stmt.free();
+      if (!assignment) {
+        return res.status(409).json({
+          data: null,
+          error: `Asset ${assetId} has no active assignment`,
+        });
+      }
+      assignments.push(assignment);
+    }
+
+    const now = new Date().toISOString();
+    for (const assignment of assignments) {
+      let stmt = db.prepare('UPDATE Assignments SET ReturnedDate = ?, Status = ? WHERE Id = ?');
+      await stmt.run([now, 'Returned', assignment.AssignmentId]);
+      stmt.free();
+
+      stmt = db.prepare('UPDATE Assets SET Status = ?, AssignedToId = NULL WHERE Id = ?');
+      await stmt.run(['Available', assignment.AssetId]);
+      stmt.free();
+    }
+
+    persist();
+
+    for (const assignment of assignments) {
+      sendUnassignmentNotification(
+        { Name: assignment.EmployeeName, Email: assignment.Email },
+        { Name: assignment.AssetName, SerialNumber: assignment.SerialNumber },
+        now
+      ).catch((err) => {
+        console.error('[assignments] Unassignment email notification error:', err.message);
+      });
+    }
+
+    return res.json({
+      data: assignments.map((assignment) => ({
+        AssetId: assignment.AssetId,
+        ReturnedDate: now,
+        Status: 'Returned',
+      })),
       error: null,
     });
   } catch (err) {
@@ -276,4 +345,3 @@ router.get('/asset/:assetId', async (req, res, next) => {
 });
 
 export default router;
-

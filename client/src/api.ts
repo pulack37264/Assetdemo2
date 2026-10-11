@@ -76,6 +76,15 @@ export async function listEmployees(): Promise<Employee[]> {
   return json.data as Employee[];
 }
 
+export async function sendEmployeeAssignmentEmail(employeeId: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/employees/${employeeId}/assignment-email`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  const json = await parseJson(res);
+  if (!res.ok || json.error) throw new Error(json.error || 'Failed to send assignment email');
+}
+
 export async function createEmployee(input: {
   id: number;
   name: string;
@@ -331,6 +340,16 @@ export async function returnAsset(assetId: number): Promise<void> {
   });
   const json = await parseJson(res);
   if (!res.ok || json.error) throw new Error(json.error || 'Failed to return asset');
+}
+
+export async function returnAssets(assetIds: number[]): Promise<void> {
+  const res = await fetch(`${API_BASE}/assignments/return-batch`, {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ assetIds }),
+  });
+  const json = await parseJson(res);
+  if (!res.ok || json.error) throw new Error(json.error || 'Failed to return selected assets');
 }
 
 export type TrackingHistory = {

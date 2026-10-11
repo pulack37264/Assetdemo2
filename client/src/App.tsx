@@ -22,8 +22,10 @@ import {
   listRepairs,
   login,
   returnAsset,
+  returnAssets,
   setupFirstAdmin,
   setToken,
+  sendEmployeeAssignmentEmail,
   updateAsset,
   updateEmployee,
   uploadAssetInvoice,
@@ -110,6 +112,11 @@ function App() {
   const [empStep, setEmpStep] = useState<'form' | 'preview'>('form');
   const [editingEmployeeId, setEditingEmployeeId] = useState<number | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
+  const [sendingAssignmentEmail, setSendingAssignmentEmail] = useState(false);
+  const [assignmentEmailFeedback, setAssignmentEmailFeedback] = useState<{ employeeId: number; message: string; error: boolean } | null>(null);
+  const [selectedReturnAssetIds, setSelectedReturnAssetIds] = useState<number[]>([]);
+  const [returningEmployeeAssets, setReturningEmployeeAssets] = useState(false);
+  const [returnEmployeeAssetsError, setReturnEmployeeAssetsError] = useState<string | null>(null);
   const [employeeSearchQuery, setEmployeeSearchQuery] = useState('');
 
   // Assets state
@@ -782,6 +789,43 @@ function App() {
     }
   }
 
+  async function onSendEmployeeAssignmentEmail(emp: Employee) {
+    try {
+      setSendingAssignmentEmail(true);
+      setAssignmentEmailFeedback(null);
+      await sendEmployeeAssignmentEmail(emp.Id);
+      setAssignmentEmailFeedback({
+        employeeId: emp.Id,
+        message: `Assignment email sent to ${emp.Email}.`,
+        error: false,
+      });
+    } catch (e: unknown) {
+      setAssignmentEmailFeedback({
+        employeeId: emp.Id,
+        message: e instanceof Error ? e.message : 'Failed to send assignment email',
+        error: true,
+      });
+    } finally {
+      setSendingAssignmentEmail(false);
+    }
+  }
+
+  async function onReturnSelectedEmployeeAssets(employee: Employee) {
+    if (selectedReturnAssetIds.length === 0) return;
+    if (!window.confirm(`Return ${selectedReturnAssetIds.length} selected asset(s) from ${employee.Name}?`)) return;
+    try {
+      setReturningEmployeeAssets(true);
+      setReturnEmployeeAssetsError(null);
+      await returnAssets(selectedReturnAssetIds);
+      setSelectedReturnAssetIds([]);
+      await Promise.all([refreshAssets(), refreshEmployees()]);
+    } catch (e: unknown) {
+      setReturnEmployeeAssetsError(e instanceof Error ? e.message : 'Failed to return selected assets');
+    } finally {
+      setReturningEmployeeAssets(false);
+    }
+  }
+
   async function onReturn(assetId: number, options?: { confirm?: boolean }) {
     const asset = assets.find((a) => a.Id === assetId);
     const emp = asset?.AssignedToId ? employees.find((e) => e.Id === asset.AssignedToId) : null;
@@ -1396,7 +1440,12 @@ function App() {
                               <tr
                                 key={emp.Id}
                                 style={{ cursor: "pointer" }}
-                                onClick={() => setSelectedEmployeeId(emp.Id)}
+                                onClick={() => {
+                                  setSelectedEmployeeId(emp.Id);
+                                  setSelectedReturnAssetIds([]);
+                                  setReturnEmployeeAssetsError(null);
+                                  setAssignmentEmailFeedback(null);
+                                }}
                               >
                                 <td>{emp.Id}</td>
                                 <td>{emp.Name}</td>
@@ -1431,10 +1480,38 @@ function App() {
                 <div className="modal-card employee-modal-card" onClick={(e) => e.stopPropagation()}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                     <h3>Employee details</h3>
-                    <button type="button" onClick={() => setSelectedEmployeeId(null)}>
-                      Close
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button
+                        type="button"
+                        onClick={() => void onReturnSelectedEmployeeAssets(emp)}
+                        disabled={returningEmployeeAssets || selectedReturnAssetIds.length === 0}
+                      >
+                        {returningEmployeeAssets ? 'Returning...' : `Return selected (${selectedReturnAssetIds.length})`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void onSendEmployeeAssignmentEmail(emp)}
+                        disabled={sendingAssignmentEmail || assignedAssets.length === 0 || !emp.Email}
+                      >
+                        {sendingAssignmentEmail ? 'Sending...' : 'Send assignment email'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedEmployeeId(null);
+                          setSelectedReturnAssetIds([]);
+                        }}
+                      >
+                        Close
+                      </button>
+                    </div>
                   </div>
+                  {returnEmployeeAssetsError && <p className="error" role="alert">{returnEmployeeAssetsError}</p>}
+                  {assignmentEmailFeedback?.employeeId === emp.Id && (
+                    <p className={assignmentEmailFeedback.error ? 'error' : undefined} role="status">
+                      {assignmentEmailFeedback.message}
+                    </p>
+                  )}
                   <div
                     style={{
                       display: 'grid',
@@ -1458,6 +1535,18 @@ function App() {
                       <table className="table">
                         <thead>
                           <tr>
+                            <th>
+                              <input
+                                type="checkbox"
+                                aria-label="Select all assigned assets"
+                                checked={assignedAssets.length > 0 && assignedAssets.every((asset) => selectedReturnAssetIds.includes(asset.Id))}
+                                onChange={(event) => {
+                                  setSelectedReturnAssetIds(
+                                    event.target.checked ? assignedAssets.map((asset) => asset.Id) : []
+                                  );
+                                }}
+                              />
+                            </th>
                             <th>Name</th>
                             <th>Type</th>
                             <th>Serial</th>
@@ -1477,6 +1566,20 @@ function App() {
                                 setSelectedAssetId(a.Id);
                               }}
                             >
+                              <td onClick={(event) => event.stopPropagation()}>
+                                <input
+                                  type="checkbox"
+                                  aria-label={`Select ${a.Name} for return`}
+                                  checked={selectedReturnAssetIds.includes(a.Id)}
+                                  onChange={(event) => {
+                                    setSelectedReturnAssetIds((current) => (
+                                      event.target.checked
+                                        ? [...current, a.Id]
+                                        : current.filter((assetId) => assetId !== a.Id)
+                                    ));
+                                  }}
+                                />
+                              </td>
                               <td>{a.Name}</td>
                               <td>{a.Type}</td>
                               <td>{a.SerialNumber}</td>

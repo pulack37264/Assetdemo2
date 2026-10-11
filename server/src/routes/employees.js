@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getDb, persist, isUniqueConstraintError, isForeignKeyConstraintError } from '../config/db.js';
+import { sendAssignmentNotification } from '../services/email.js';
 
 const router = Router();
 
@@ -24,6 +25,45 @@ router.get('/', async (req, res, next) => {
     while (await stmt.step()) rows.push(stmt.getAsObject());
     stmt.free();
     res.json({ data: rows, error: null });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/employees/:id/assignment-email - send an assignment email from employee details
+router.post('/:id/assignment-email', async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id < 1) {
+      return res.status(400).json({ data: null, error: 'Invalid employee ID' });
+    }
+
+    const db = getDbOrFail();
+    let stmt = db.prepare('SELECT Id, Name, Email, Department, Branch FROM Employees WHERE Id = ?');
+    stmt.bind([id]);
+    const employee = (await stmt.step()) ? stmt.getAsObject() : null;
+    stmt.free();
+    if (!employee) {
+      return res.status(404).json({ data: null, error: 'Employee not found' });
+    }
+
+    stmt = db.prepare(`
+      SELECT ast.Name, ast.SerialNumber, asn.AssignedDate
+      FROM Assignments asn
+      JOIN Assets ast ON ast.Id = asn.AssetId
+      WHERE asn.EmployeeId = ? AND asn.ReturnedDate IS NULL AND asn.Status = 'Active'
+      ORDER BY asn.AssignedDate DESC
+    `);
+    stmt.bind([id]);
+    const assignedAssets = [];
+    while (await stmt.step()) assignedAssets.push(stmt.getAsObject());
+    stmt.free();
+    if (assignedAssets.length === 0) {
+      return res.status(409).json({ data: null, error: 'This employee has no assigned assets to include in an email' });
+    }
+
+    await sendAssignmentNotification(employee, assignedAssets);
+    return res.json({ data: { sentTo: employee.Email }, error: null });
   } catch (err) {
     next(err);
   }
