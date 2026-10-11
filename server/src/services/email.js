@@ -91,7 +91,8 @@ export async function sendAssignmentNotification(employee, assets, assignedDate)
         .table td { padding: 12px; border-bottom: 1px solid #ddd; }
         .table tr:nth-child(even) { background-color: #f9f9f9; }
         .employee-details { margin: 15px 0; }
-        .employee-details td:first-child { width: 35%; font-weight: bold; }
+        .employee-details td { padding: 8px; }
+        .employee-details .label { font-weight: bold; white-space: nowrap; }
         .footer { margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666; }
         .warning { background-color: #fff3cd; padding: 10px; border-left: 4px solid #DC143C; margin: 15px 0; }
       </style>
@@ -105,18 +106,18 @@ export async function sendAssignmentNotification(employee, assets, assignedDate)
         
         <div class="content">
           <p class="greeting">Dear ${escapeHtml(employee.Name || 'Valued Employee')},</p>
-          
-          <p>We are pleased to inform you that the following ${assignedAssets.length === 1 ? 'IT asset has' : 'IT assets have'} been assigned to you:</p>
 
           <table class="table employee-details">
             <tbody>
-              <tr><td>Employee ID</td><td>${escapeHtml(employee.Id || '—')}</td></tr>
-              <tr><td>Name</td><td>${escapeHtml(employee.Name || '—')}</td></tr>
-              <tr><td>Email</td><td>${escapeHtml(employee.Email || '—')}</td></tr>
-              <tr><td>Department</td><td>${escapeHtml(employee.Department || '—')}</td></tr>
-              <tr><td>Branch</td><td>${escapeHtml(employee.Branch || '—')}</td></tr>
+              <tr>
+                <td class="label">ID</td><td>${escapeHtml(employee.Id || '—')}</td>
+                <td class="label">Branch</td><td>${escapeHtml(employee.Branch || '—')}</td>
+                <td class="label">Department</td><td>${escapeHtml(employee.Department || '—')}</td>
+              </tr>
             </tbody>
           </table>
+
+          <p>We are pleased to inform you that the following ${assignedAssets.length === 1 ? 'IT asset has' : 'IT assets have'} been assigned to you:</p>
           
           <table class="table">
             <thead>
@@ -165,11 +166,13 @@ export async function sendAssignmentNotification(employee, assets, assignedDate)
 
 /**
  * Send asset unassignment notification when an employee returns an asset.
- * @param {{ Name: string, Email?: string }} employee
- * @param {{ Name: string, SerialNumber?: string }} asset
+ * @param {{ Id?: number, Name: string, Email?: string, Department?: string, Branch?: string }} employee
+ * @param {{ Name: string, SerialNumber?: string } | Array<{ Name: string, SerialNumber?: string }>} assets
  * @param {string} returnedDate - ISO date string of return
  */
-export async function sendUnassignmentNotification(employee, asset, returnedDate) {
+export async function sendUnassignmentNotification(employee, assets, returnedDate) {
+  const returnedAssets = Array.isArray(assets) ? assets : [assets];
+  if (returnedAssets.length === 0) return;
   const to = employee?.Email?.trim();
   if (!to) {
     console.warn('[email] Unassignment notification skipped: no employee email');
@@ -186,7 +189,9 @@ export async function sendUnassignmentNotification(employee, asset, returnedDate
     ? new Date(returnedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
     : 'N/A';
   
-  const subject = 'Asset Returned - Confirmation';
+  const subject = returnedAssets.length === 1
+    ? 'Asset Returned - Confirmation'
+    : 'Assets Returned - Confirmation';
   const logoHtml = buildLogoHtml();
   const html = `
     <!DOCTYPE html>
@@ -204,6 +209,9 @@ export async function sendUnassignmentNotification(employee, asset, returnedDate
         .table th { background-color: #DC143C; color: white; padding: 12px; text-align: left; font-weight: bold; }
         .table td { padding: 12px; border-bottom: 1px solid #ddd; }
         .table tr:nth-child(even) { background-color: #f9f9f9; }
+        .employee-details { margin: 15px 0; }
+        .employee-details td { padding: 8px; }
+        .employee-details .label { font-weight: bold; white-space: nowrap; }
         .footer { margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666; }
         .success-badge { background-color: #d4edda; padding: 10px; border-left: 4px solid #DC143C; margin: 15px 0; color: #155724; }
       </style>
@@ -217,34 +225,40 @@ export async function sendUnassignmentNotification(employee, asset, returnedDate
         
         <div class="content">
           <p class="greeting">Dear ${escapeHtml(employee.Name || 'Valued Employee')},</p>
-          
-          <p>Thank you for returning the following IT asset:</p>
+
+          <table class="table employee-details">
+            <tbody>
+              <tr>
+                <td class="label">ID</td><td>${escapeHtml(employee.Id || '—')}</td>
+                <td class="label">Branch</td><td>${escapeHtml(employee.Branch || '—')}</td>
+                <td class="label">Department</td><td>${escapeHtml(employee.Department || '—')}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p>Thank you for returning the following ${returnedAssets.length === 1 ? 'IT asset' : 'IT assets'}:</p>
           
           <table class="table">
             <thead>
               <tr>
-                <th>Asset Details</th>
-                <th>Value</th>
+                <th>Asset Name</th>
+                <th>Serial Number</th>
+                <th>Returned Date</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td><strong>Asset Name</strong></td>
-                <td>${escapeHtml(asset.Name || '—')}</td>
-              </tr>
-              <tr>
-                <td><strong>Serial Number</strong></td>
-                <td>${escapeHtml(asset.SerialNumber || '—')}</td>
-              </tr>
-              <tr>
-                <td><strong>Returned Date</strong></td>
-                <td>${escapeHtml(formattedDate)}</td>
-              </tr>
+              ${returnedAssets.map((asset) => `
+                <tr>
+                  <td>${escapeHtml(asset.Name || '—')}</td>
+                  <td>${escapeHtml(asset.SerialNumber || '—')}</td>
+                  <td>${escapeHtml(formattedDate)}</td>
+                </tr>
+              `).join('')}
             </tbody>
           </table>
           
           <div class="success-badge">
-            <strong>✓ Return Confirmed:</strong> The asset has been successfully recorded as returned in our system.
+            <strong>✓ Return Confirmed:</strong> ${returnedAssets.length === 1 ? 'The asset has' : 'The assets have'} been successfully recorded as returned in our system.
           </div>
           
           <p>We appreciate your care and responsibility in maintaining company equipment. If you have any questions, please feel free to contact the IT Department.</p>

@@ -105,7 +105,8 @@ router.post('/return-batch', async (req, res, next) => {
 
     for (const assetId of assetIds) {
       let stmt = db.prepare(`
-        SELECT asn.Id AS AssignmentId, asn.AssetId, e.Name AS EmployeeName, e.Email,
+        SELECT asn.Id AS AssignmentId, asn.AssetId, e.Id AS EmployeeId, e.Name AS EmployeeName,
+               e.Email, e.Department, e.Branch,
                ast.Name AS AssetName, ast.SerialNumber
         FROM Assignments asn
         JOIN Employees e ON e.Id = asn.EmployeeId
@@ -139,10 +140,32 @@ router.post('/return-batch', async (req, res, next) => {
 
     persist();
 
+    const notificationsByEmployee = new Map();
     for (const assignment of assignments) {
+      let notification = notificationsByEmployee.get(assignment.EmployeeId);
+      if (!notification) {
+        notification = {
+          employee: {
+            Id: assignment.EmployeeId,
+            Name: assignment.EmployeeName,
+            Email: assignment.Email,
+            Department: assignment.Department,
+            Branch: assignment.Branch,
+          },
+          assets: [],
+        };
+        notificationsByEmployee.set(assignment.EmployeeId, notification);
+      }
+      notification.assets.push({
+        Name: assignment.AssetName,
+        SerialNumber: assignment.SerialNumber,
+      });
+    }
+
+    for (const { employee, assets } of notificationsByEmployee.values()) {
       sendUnassignmentNotification(
-        { Name: assignment.EmployeeName, Email: assignment.Email },
-        { Name: assignment.AssetName, SerialNumber: assignment.SerialNumber },
+        employee,
+        assets,
         now
       ).catch((err) => {
         console.error('[assignments] Unassignment email notification error:', err.message);
@@ -200,7 +223,8 @@ router.post('/return/:assetId', async (req, res, next) => {
 
     // Fetch employee and asset info for notification before clearing AssignedToId
     stmt = db.prepare(`
-      SELECT e.Id AS EmployeeId, e.Name AS EmployeeName, e.Email, a.Name AS AssetName, a.SerialNumber
+      SELECT e.Id AS EmployeeId, e.Name AS EmployeeName, e.Email, e.Department, e.Branch,
+             a.Name AS AssetName, a.SerialNumber
       FROM Assignments ASn
       JOIN Employees e ON e.Id = ASn.EmployeeId
       JOIN Assets a ON a.Id = ASn.AssetId
@@ -219,7 +243,13 @@ router.post('/return/:assetId', async (req, res, next) => {
 
     if (notificationData) {
       sendUnassignmentNotification(
-        { Name: notificationData.EmployeeName, Email: notificationData.Email },
+        {
+          Id: notificationData.EmployeeId,
+          Name: notificationData.EmployeeName,
+          Email: notificationData.Email,
+          Department: notificationData.Department,
+          Branch: notificationData.Branch,
+        },
         { Name: notificationData.AssetName, SerialNumber: notificationData.SerialNumber },
         now
       ).catch((err) => {
