@@ -71,6 +71,8 @@ export async function sendAssignmentNotification(employee, assets, assignedDate)
   const formatAssignedDate = (date) => date
     ? new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
     : 'N/A';
+
+  const employeeDetailsHtml = buildEmployeeDetailsHtml(employee);
   
   const subject = assignedAssets.length === 1 ? 'IT Asset Assigned Notification' : 'IT Assets Assigned Notification';
   const logoHtml = buildLogoHtml();
@@ -79,6 +81,7 @@ export async function sendAssignmentNotification(employee, assets, assignedDate)
     <html>
     <head>
       <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <style>
         body { font-family: Arial, sans-serif; color: #333; line-height: 1.6; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -93,8 +96,18 @@ export async function sendAssignmentNotification(employee, assets, assignedDate)
         .employee-details { margin: 15px 0; }
         .employee-details td { padding: 8px; }
         .employee-details .label { font-weight: bold; white-space: nowrap; }
-        .footer { margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666; }
-        .warning { background-color: #fff3cd; padding: 10px; border-left: 4px solid #DC143C; margin: 15px 0; }
+        .footer { margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666; display: block !important; }
+        .warning { background-color: #fff3cd; padding: 10px; border-left: 4px solid #DC143C; margin: 15px 0; display: block !important; }
+        blockquote, .gmail_quote, .moz-cite-prefix { display: block !important; max-height: none !important; overflow: visible !important; white-space: normal !important; }
+        p, div { display: block !important; }
+        td, th { word-break: break-word; }
+        @media only screen and (max-width: 480px) {
+          .container { padding: 12px; }
+          .content { padding: 12px; }
+          .header { padding: 16px 12px 8px; }
+          .table td, .table th { padding: 8px 10px; }
+          .greeting { font-size: 15px; }
+        }
       </style>
     </head>
     <body>
@@ -107,15 +120,7 @@ export async function sendAssignmentNotification(employee, assets, assignedDate)
         <div class="content">
           <p class="greeting">Dear ${escapeHtml(employee.Name || 'Valued Employee')},</p>
 
-          <table class="table employee-details">
-            <tbody>
-              <tr>
-                <td class="label">ID</td><td>${escapeHtml(employee.Id || '—')}</td>
-                <td class="label">Branch</td><td>${escapeHtml(employee.Branch || '—')}</td>
-                <td class="label">Department</td><td>${escapeHtml(employee.Department || '—')}</td>
-              </tr>
-            </tbody>
-          </table>
+          ${employeeDetailsHtml}
 
           <p>We are pleased to inform you that the following ${assignedAssets.length === 1 ? 'IT asset has' : 'IT assets have'} been assigned to you:</p>
           
@@ -192,12 +197,14 @@ export async function sendUnassignmentNotification(employee, assets, returnedDat
   const subject = returnedAssets.length === 1
     ? 'Asset Returned - Confirmation'
     : 'Assets Returned - Confirmation';
+  const employeeDetailsHtml = buildEmployeeDetailsHtml(employee);
   const logoHtml = buildLogoHtml();
   const html = `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <style>
         body { font-family: Arial, sans-serif; color: #333; line-height: 1.6; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -213,7 +220,17 @@ export async function sendUnassignmentNotification(employee, assets, returnedDat
         .employee-details td { padding: 8px; }
         .employee-details .label { font-weight: bold; white-space: nowrap; }
         .footer { margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666; }
-        .success-badge { background-color: #d4edda; padding: 10px; border-left: 4px solid #DC143C; margin: 15px 0; color: #155724; }
+        .success-badge { background-color: #d4edda; padding: 10px; border-left: 4px solid #DC143C; margin: 15px 0; color: #155724; display: block !important; }
+        blockquote, .gmail_quote, .moz-cite-prefix { display: block !important; max-height: none !important; overflow: visible !important; white-space: normal !important; }
+        p, div { display: block !important; }
+        td, th { word-break: break-word; }
+        @media only screen and (max-width: 480px) {
+          .container { padding: 12px; }
+          .content { padding: 12px; }
+          .header { padding: 16px 12px 8px; }
+          .table td, .table th { padding: 8px 10px; }
+          .greeting { font-size: 15px; }
+        }
       </style>
     </head>
     <body>
@@ -226,15 +243,7 @@ export async function sendUnassignmentNotification(employee, assets, returnedDat
         <div class="content">
           <p class="greeting">Dear ${escapeHtml(employee.Name || 'Valued Employee')},</p>
 
-          <table class="table employee-details">
-            <tbody>
-              <tr>
-                <td class="label">ID</td><td>${escapeHtml(employee.Id || '—')}</td>
-                <td class="label">Branch</td><td>${escapeHtml(employee.Branch || '—')}</td>
-                <td class="label">Department</td><td>${escapeHtml(employee.Department || '—')}</td>
-              </tr>
-            </tbody>
-          </table>
+          ${employeeDetailsHtml}
 
           <p>Thank you for returning the following ${returnedAssets.length === 1 ? 'IT asset' : 'IT assets'}:</p>
           
@@ -285,6 +294,15 @@ export async function sendUnassignmentNotification(employee, assets, returnedDat
   } catch (err) {
     console.error('[email] Failed to send unassignment notification:', err.message);
   }
+}
+
+export function buildEmployeeDetailsHtml(employee) {
+  const idValue = escapeHtml(employee?.Id ?? '—');
+  return `
+    <p style="margin: 8px 0 18px; font-size: 15px; color: #333;">
+      <strong>ID:</strong> ${idValue}
+    </p>
+  `;
 }
 
 function escapeHtml(s) {
