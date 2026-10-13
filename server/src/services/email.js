@@ -90,8 +90,8 @@ export async function sendAssignmentNotification(employee, assets, assignedDate)
         .content { padding: 20px; }
         .greeting { font-size: 16px; font-weight: bold; color: #333; margin-bottom: 15px; }
         .table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        .table th { background-color: #DC143C; color: white; padding: 12px; text-align: left; font-weight: bold; }
-        .table td { padding: 12px; border-bottom: 1px solid #ddd; }
+        .table th { background-color: #DC143C; color: white; padding: 7px; text-align: left; font-weight: bold; }
+        .table td { padding: 5px; border-bottom: 0px solid #ddd; }
         .table tr:nth-child(even) { background-color: #f9f9f9; }
         .employee-details { margin: 15px 0; }
         .employee-details td { padding: 8px; }
@@ -100,12 +100,13 @@ export async function sendAssignmentNotification(employee, assets, assignedDate)
         .warning { background-color: #fff3cd; padding: 10px; border-left: 4px solid #DC143C; margin: 15px 0; display: block !important; }
         blockquote, .gmail_quote, .moz-cite-prefix { display: block !important; max-height: none !important; overflow: visible !important; white-space: normal !important; }
         p, div { display: block !important; }
-        td, th { word-break: break-word; }
+        td, th { word-break: break-word; overflow-wrap: anywhere; }
         @media only screen and (max-width: 480px) {
-          .container { padding: 12px; }
-          .content { padding: 12px; }
-          .header { padding: 16px 12px 8px; }
-          .table td, .table th { padding: 8px 10px; }
+          .container { padding: 6px; }
+          .content { padding: 6px; }
+          .header { padding: 12px 8px 4px; }
+          .table { margin: 12px 0; font-size: 12px; }
+          .table td, .table th { padding: 4px 5px; }
           .greeting { font-size: 15px; }
         }
       </style>
@@ -223,12 +224,13 @@ export async function sendUnassignmentNotification(employee, assets, returnedDat
         .success-badge { background-color: #d4edda; padding: 10px; border-left: 4px solid #DC143C; margin: 15px 0; color: #155724; display: block !important; }
         blockquote, .gmail_quote, .moz-cite-prefix { display: block !important; max-height: none !important; overflow: visible !important; white-space: normal !important; }
         p, div { display: block !important; }
-        td, th { word-break: break-word; }
+        td, th { word-break: break-word; overflow-wrap: anywhere; }
         @media only screen and (max-width: 480px) {
           .container { padding: 12px; }
           .content { padding: 12px; }
           .header { padding: 16px 12px 8px; }
-          .table td, .table th { padding: 8px 10px; }
+          .table { margin: 12px 0; font-size: 12px; }
+          .table td, .table th { padding: 4px 5px; }
           .greeting { font-size: 15px; }
         }
       </style>
