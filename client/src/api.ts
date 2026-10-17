@@ -85,6 +85,21 @@ export async function sendEmployeeAssignmentEmail(employeeId: number): Promise<v
   if (!res.ok || json.error) throw new Error(json.error || 'Failed to send assignment email');
 }
 
+export async function sendAssetAuditEmail(
+  assetIds: number[],
+  recipientEmail: string,
+  subject: string
+): Promise<{ sentTo: string }> {
+  const res = await fetch(`${API_BASE}/assets/audit-email`, {
+    method: 'POST',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ assetIds, recipientEmail, subject }),
+  });
+  const json = await parseJson(res);
+  if (!res.ok || json.error) throw new Error(json.error || 'Failed to send asset audit email');
+  return json.data as { sentTo: string };
+}
+
 export async function createEmployee(input: {
   id: number;
   name: string;

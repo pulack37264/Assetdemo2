@@ -170,6 +170,56 @@ export async function sendAssignmentNotification(employee, assets, assignedDate)
   console.log('[email] Assignment notification sent to', to);
 }
 
+export function buildAssetAuditHtml(assets) {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8"></head>
+    <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.5;">
+      <h2>Asset Audit List</h2>
+      <p>Please find the selected assets for audit below.</p>
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="background-color: #DC143C; color: white; text-align: left;">
+            <th style="padding: 8px;">Asset Name</th>
+            <th style="padding: 8px;">Purchase Date</th>
+            <th style="padding: 8px;">Warranty Expiry</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${assets.map((asset) => `
+            <tr>
+              <td style="padding: 8px; border-bottom: 1px solid #ddd;">${escapeHtml(asset.Name || '—')}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #ddd;">${escapeHtml(asset.PurchaseDate || '—')}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #ddd;">${escapeHtml(asset.WarrantyExpiry || '—')}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </body>
+    </html>
+  `;
+}
+
+export async function sendAssetAuditEmail(to, subject, assets) {
+  if (!Array.isArray(assets) || assets.length === 0) {
+    throw new Error('At least one asset is required for an audit email');
+  }
+  const transport = getTransporter();
+  if (!transport) {
+    throw new Error('SMTP is not configured (set SMTP_HOST, SMTP_USER, SMTP_PASS)');
+  }
+
+  await transport.sendMail({
+    from: MAIL_FROM,
+    to,
+    subject,
+    html: buildAssetAuditHtml(assets),
+    attachments: buildLogoAttachment(),
+  });
+  console.log('[email] Asset audit list sent to', to);
+}
+
 /**
  * Send asset unassignment notification when an employee returns an asset.
  * @param {{ Id?: number, Name: string, Email?: string, Department?: string, Branch?: string }} employee

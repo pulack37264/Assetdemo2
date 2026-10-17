@@ -80,7 +80,7 @@ DB_PASSWORD=your_db_password
 DB_NAME=AssetManagement
 DB_ENCRYPT=true
 
-# Optional: email (assignment notifications)
+# Optional: email (assignment notifications and asset audit lists)
 # SMTP_HOST=smtp.office365.com
 # SMTP_PORT=587
 # SMTP_USER=notifications@yourcompany.com

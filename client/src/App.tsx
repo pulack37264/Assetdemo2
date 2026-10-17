@@ -25,6 +25,7 @@ import {
   returnAssets,
   setupFirstAdmin,
   setToken,
+  sendAssetAuditEmail,
   sendEmployeeAssignmentEmail,
   updateAsset,
   updateEmployee,
@@ -138,6 +139,12 @@ function App() {
   const [selectedBulkAssetIds, setSelectedBulkAssetIds] = useState<number[]>([]);
   const [bulkEmployeeId, setBulkEmployeeId] = useState<number | ''>('');
   const [bulkAssigning, setBulkAssigning] = useState(false);
+  const [selectedAuditAssetIds, setSelectedAuditAssetIds] = useState<number[]>([]);
+  const [auditRecipientEmail, setAuditRecipientEmail] = useState('');
+  const [auditEmailSubject, setAuditEmailSubject] = useState('');
+  const [showAuditPreview, setShowAuditPreview] = useState(false);
+  const [sendingAuditEmail, setSendingAuditEmail] = useState(false);
+  const [auditEmailFeedback, setAuditEmailFeedback] = useState<{ message: string; error: boolean } | null>(null);
   const [returningId, setReturningId] = useState<number | null>(null);
   const [uploadingInvoiceId, setUploadingInvoiceId] = useState<number | null>(null);
   const [showAddAssetForm, setShowAddAssetForm] = useState(false);
@@ -787,6 +794,41 @@ function App() {
     } finally {
       setBulkAssigning(false);
     }
+  }
+
+  async function onSendAssetAuditEmail() {
+    if (selectedAuditAssetIds.length === 0 || !auditRecipientEmail.trim() || !auditEmailSubject.trim()) {
+      setAuditEmailFeedback({ message: 'Select assets, enter management’s email address, and provide a subject.', error: true });
+      return;
+    }
+    try {
+      setSendingAuditEmail(true);
+      setAuditEmailFeedback(null);
+      const { sentTo } = await sendAssetAuditEmail(
+        selectedAuditAssetIds,
+        auditRecipientEmail.trim(),
+        auditEmailSubject.trim()
+      );
+      setSelectedAuditAssetIds([]);
+      setShowAuditPreview(false);
+      setAuditEmailFeedback({ message: `Asset audit list sent to ${sentTo}.`, error: false });
+    } catch (e: unknown) {
+      setAuditEmailFeedback({
+        message: e instanceof Error ? e.message : 'Failed to send asset audit email',
+        error: true,
+      });
+    } finally {
+      setSendingAuditEmail(false);
+    }
+  }
+
+  function openAuditPreview() {
+    if (selectedAuditAssetIds.length === 0) {
+      setAuditEmailFeedback({ message: 'Select at least one asset to preview.', error: true });
+      return;
+    }
+    setAuditEmailFeedback(null);
+    setShowAuditPreview(true);
   }
 
   async function onSendEmployeeAssignmentEmail(emp: Employee) {
@@ -1990,6 +2032,98 @@ function App() {
                     </button>
                   )}
                 </div>
+                <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span>{selectedAuditAssetIds.length} asset{selectedAuditAssetIds.length === 1 ? '' : 's'} selected for audit</span>
+                  <button
+                    type="button"
+                    onClick={openAuditPreview}
+                    disabled={sendingAuditEmail || selectedAuditAssetIds.length === 0}
+                  >
+                    Preview email
+                  </button>
+                  {selectedAuditAssetIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAuditAssetIds([])}
+                      disabled={sendingAuditEmail}
+                    >
+                      Clear audit selection
+                    </button>
+                  )}
+                  {auditEmailFeedback && (
+                    <span role="status" style={{ color: auditEmailFeedback.error ? '#b91c1c' : '#15803d' }}>
+                      {auditEmailFeedback.message}
+                    </span>
+                  )}
+                </div>
+                {showAuditPreview && (
+                  <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', zIndex: 1000 }}>
+                    <div style={{ background: '#fff', width: 'min(700px, 100%)', maxHeight: '80vh', overflow: 'auto', borderRadius: '12px', boxShadow: '0 20px 45px rgba(0,0,0,0.2)', padding: '1.25rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <h3 style={{ margin: 0 }}>Asset audit email preview</h3>
+                        <button type="button" onClick={() => setShowAuditPreview(false)}>Close</button>
+                      </div>
+                      <label style={{ display: 'block', marginBottom: '0.75rem' }}>
+                        <strong>To</strong>
+                        <input
+                          type="email"
+                          aria-label="Management email address"
+                          placeholder="Management email"
+                          value={auditRecipientEmail}
+                          onChange={(e) => setAuditRecipientEmail(e.target.value)}
+                          disabled={sendingAuditEmail}
+                          style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: '0.35rem' }}
+                        />
+                      </label>
+                      <label style={{ display: 'block', marginBottom: '1rem' }}>
+                        <strong>Subject</strong>
+                        <input
+                          type="text"
+                          aria-label="Audit email subject"
+                          placeholder="Email subject"
+                          value={auditEmailSubject}
+                          maxLength={200}
+                          onChange={(e) => setAuditEmailSubject(e.target.value)}
+                          disabled={sendingAuditEmail}
+                          style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: '0.35rem' }}
+                        />
+                      </label>
+                      {auditEmailFeedback?.error && (
+                        <p role="alert" style={{ color: '#b91c1c', margin: '0 0 1rem' }}>
+                          {auditEmailFeedback.message}
+                        </p>
+                      )}
+                      <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #e5e7eb' }}>
+                        <thead>
+                          <tr style={{ background: '#f3f4f6' }}>
+                            <th style={{ textAlign: 'left', padding: '0.6rem', borderBottom: '1px solid #e5e7eb' }}>Asset Name</th>
+                            <th style={{ textAlign: 'left', padding: '0.6rem', borderBottom: '1px solid #e5e7eb' }}>Purchase Date</th>
+                            <th style={{ textAlign: 'left', padding: '0.6rem', borderBottom: '1px solid #e5e7eb' }}>Warranty Expiry</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {assets.filter((asset) => selectedAuditAssetIds.includes(asset.Id)).map((asset) => (
+                            <tr key={asset.Id}>
+                              <td style={{ padding: '0.6rem', borderBottom: '1px solid #e5e7eb' }}>{asset.Name}</td>
+                              <td style={{ padding: '0.6rem', borderBottom: '1px solid #e5e7eb' }}>{asset.PurchaseDate || '—'}</td>
+                              <td style={{ padding: '0.6rem', borderBottom: '1px solid #e5e7eb' }}>{asset.WarrantyExpiry || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+                        <button type="button" onClick={() => setShowAuditPreview(false)}>Back to edit</button>
+                        <button
+                          type="button"
+                          onClick={onSendAssetAuditEmail}
+                          disabled={sendingAuditEmail || !auditRecipientEmail.trim() || !auditEmailSubject.trim()}
+                        >
+                          {sendingAuditEmail ? 'Sending…' : 'Send email'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {(() => {
                   const q = assetSearchQuery.trim().toLowerCase();
                   const filtered = q
@@ -2036,6 +2170,20 @@ function App() {
                   <thead>
                     <tr>
                       <th aria-label="Select asset" />
+                      <th aria-label="Select asset for audit">
+                        <input
+                          type="checkbox"
+                          aria-label="Select all visible assets for audit"
+                          checked={displayAssets.length > 0 && displayAssets.every((asset) => selectedAuditAssetIds.includes(asset.Id))}
+                          disabled={sendingAuditEmail}
+                          onChange={(e) => {
+                            const visibleIds = displayAssets.map((asset) => asset.Id);
+                            setSelectedAuditAssetIds((current) => e.target.checked
+                              ? [...new Set([...current, ...visibleIds])]
+                              : current.filter((id) => !visibleIds.includes(id)));
+                          }}
+                        />
+                      </th>
                       {sortTh('Name', 'Name')}
                       {sortTh('Type', 'Type')}
                       {sortTh('SerialNumber', 'Serial')}
@@ -2050,7 +2198,7 @@ function App() {
                   </thead>
                   <tbody>
                     {displayAssets.length === 0 ? (
-                      <tr><td colSpan={11} style={{ textAlign: 'center', padding: '1.5rem', color: '#6b7280' }}>No assets match your search.</td></tr>
+                      <tr><td colSpan={12} style={{ textAlign: 'center', padding: '1.5rem', color: '#6b7280' }}>No assets match your search.</td></tr>
                     ) : displayAssets.map((asset) => (
                       <tr
                         key={asset.Id}
@@ -2064,6 +2212,19 @@ function App() {
                             checked={selectedBulkAssetIds.includes(asset.Id)}
                             disabled={asset.Status !== 'Available' || bulkAssigning}
                             onChange={(e) => setSelectedBulkAssetIds((current) => (
+                              e.target.checked
+                                ? [...current, asset.Id]
+                                : current.filter((id) => id !== asset.Id)
+                            ))}
+                          />
+                        </td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${asset.Name} for audit email`}
+                            checked={selectedAuditAssetIds.includes(asset.Id)}
+                            disabled={sendingAuditEmail}
+                            onChange={(e) => setSelectedAuditAssetIds((current) => (
                               e.target.checked
                                 ? [...current, asset.Id]
                                 : current.filter((id) => id !== asset.Id)

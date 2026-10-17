@@ -89,6 +89,7 @@ $env:BASE_URL='http://localhost:3001/api'; node test-api.js
 | GET | /api/health/db | Database connectivity |
 | GET/POST/PUT/DELETE | /api/employees | Employees (id required on create) |
 | GET/POST/PUT | /api/assets | Assets |
+| POST | /api/assets/audit-email | Email selected asset name, purchase date, and warranty expiry to management |
 | GET | /api/assets/:id/invoice | Download invoice PDF |
 | POST | /api/assets/:id/invoice | Upload invoice PDF (multipart) |
 | POST | /api/assignments | Assign asset to employee |
@@ -97,6 +98,10 @@ $env:BASE_URL='http://localhost:3001/api'; node test-api.js
 | PUT | /api/repairs/:id/complete | Complete repair |
 | GET | /api/dashboard/stats | Dashboard stats |
 | GET | /api/invoices | List invoices (with asset info) |
+
+### Emailing an asset audit list
+
+On the **Assets** page, select assets using the audit checkboxes, enter management’s email address and a subject, and choose **Preview email**. Review the recipient, subject, and asset list before sending from the preview. The message includes only asset name, purchase date, and warranty expiry. Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, and `SMTP_PASS` in `server/.env` to enable sending.
 
 ### Roles and access
 

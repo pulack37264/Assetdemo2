@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { getDb, persist, isUniqueConstraintError, isForeignKeyConstraintError } from '../config/db.js';
+import { sendAssetAuditEmail } from '../services/email.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const INVOICES_DIR = path.join(__dirname, '..', '..', 'data', 'invoices');
@@ -185,6 +186,51 @@ router.get('/', async (_req, res, next) => {
     while (await stmt.step()) rows.push(stmt.getAsObject());
     stmt.free();
     res.json({ data: rows, error: null });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/assets/audit-email - email selected asset audit fields to management
+router.post('/audit-email', async (req, res, next) => {
+  try {
+    const assetIds = req.body?.assetIds;
+    const recipientEmail = String(req.body?.recipientEmail ?? '').trim();
+    const subject = String(req.body?.subject ?? '').trim();
+    if (!Array.isArray(assetIds) || assetIds.length === 0) {
+      return res.status(400).json({ data: null, error: 'Select at least one asset for the audit email' });
+    }
+    if (assetIds.length > 2000) {
+      return res.status(400).json({ data: null, error: 'Select no more than 2,000 assets per audit email' });
+    }
+    if (!assetIds.every((id) => Number.isSafeInteger(id) && id > 0)) {
+      return res.status(400).json({ data: null, error: 'Asset IDs must be positive integers' });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail) || recipientEmail.length > 254) {
+      return res.status(400).json({ data: null, error: 'Enter a valid management email address' });
+    }
+    if (!subject || subject.length > 200) {
+      return res.status(400).json({ data: null, error: 'Enter an email subject of no more than 200 characters' });
+    }
+
+    const uniqueAssetIds = [...new Set(assetIds)];
+    const db = getDbOrFail();
+    const stmt = db.prepare(`
+      SELECT Name, PurchaseDate, WarrantyExpiry
+      FROM Assets
+      WHERE Id IN (${uniqueAssetIds.map(() => '?').join(', ')})
+      ORDER BY Name
+    `);
+    stmt.bind(uniqueAssetIds);
+    const auditAssets = [];
+    while (await stmt.step()) auditAssets.push(stmt.getAsObject());
+    stmt.free();
+    if (auditAssets.length !== uniqueAssetIds.length) {
+      return res.status(404).json({ data: null, error: 'One or more selected assets could not be found' });
+    }
+
+    await sendAssetAuditEmail(recipientEmail, subject, auditAssets);
+    return res.json({ data: { sentTo: recipientEmail }, error: null });
   } catch (err) {
     next(err);
   }
@@ -539,4 +585,3 @@ router.delete('/:id', async (req, res, next) => {
 });
 
 export default router;
-
